@@ -1,0 +1,60 @@
+# 一键启动前后端（开发模式）
+#
+# 用法：
+#   docker compose up --build
+#
+# 运行 E2E 测试（需先启动 backend + frontend）：
+#   docker compose --profile test run --rm e2e
+#
+# 前端 http://localhost:5173  后端 http://localhost:8080
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      LOGGING_LEVEL_COM_DEMO_TICKET: INFO
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      # Vite 容器内通过服务名访问 backend
+      VITE_API_PROXY_TARGET: http://backend:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  e2e:
+    profiles: ["test"]
+    build:
+      context: ./e2e
+      dockerfile: Dockerfile
+    environment:
+      BASE_URL: http://host.docker.internal:5173
+      API_URL: http://host.docker.internal:8080
+      # 避免继承宿主机代理，导致容器内无法访问服务
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      NO_PROXY: "*"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started

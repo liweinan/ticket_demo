@@ -1,0 +1,10 @@
+.git
+.idea
+.vscode
+**/.env
+**/.env.*
+**/node_modules
+backend/target
+frontend/dist
+**/*.log
+.DS_Store

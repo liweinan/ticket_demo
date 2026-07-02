@@ -1,0 +1,19 @@
+[project]
+name = "ticket-demo-e2e"
+version = "1.0.0"
+description = "多租户订票 SaaS Demo — Playwright E2E 测试"
+requires-python = ">=3.11"
+dependencies = [
+    "playwright==1.52.0",
+    "pytest>=8.3.0",
+    "pytest-playwright>=0.7.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.pytest_playwright]
+# 容器内无 DISPLAY，使用 headless
+browser = "chromium"

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+target/
+.idea/
+.vscode/
+*.iml
+.DS_Store
+e2e/.venv/
+e2e/.pytest_cache/
+e2e/test-results/
+frontend/node_modules/

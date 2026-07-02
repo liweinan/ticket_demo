@@ -1,0 +1,268 @@
+/* ========== 布局 ========== */
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.app-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.app-header h1 {
+  margin: 0 0 8px;
+  font-size: 1.6rem;
+}
+
+.app-header p {
+  margin: 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.panel h2 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  border-bottom: 2px solid #eef0f5;
+  padding-bottom: 8px;
+}
+
+.hint {
+  color: #888;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.error-banner {
+  background: #ffebee;
+  color: #c62828;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+/* ========== 租户切换 ========== */
+.tenant-panel {
+  margin-bottom: 16px;
+}
+
+.tenant-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.tenant-tab {
+  flex: 1;
+  min-width: 140px;
+  padding: 10px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fafafa;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+
+.tenant-tab.active {
+  border-color: #1976d2;
+  background: #e3f2fd;
+}
+
+.tenant-tab.tier-gold.active {
+  border-color: #f9a825;
+  background: #fff8e1;
+}
+
+.tenant-tab.tier-bronze.active {
+  border-color: #8d6e63;
+  background: #efebe9;
+}
+
+.tenant-name {
+  display: block;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.tenant-meta {
+  display: block;
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 2px;
+}
+
+.tenant-info {
+  display: flex;
+  gap: 16px;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+code {
+  background: #f0f0f0;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+
+/* ========== 活动列表 ========== */
+.event-list,
+.order-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.event-card,
+.order-card {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.event-card h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+
+.event-venue {
+  margin: 0 0 6px;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.event-stock {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+.version-tag {
+  margin-left: 8px;
+  font-size: 0.75rem;
+  color: #999;
+  background: #f5f5f5;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.extension-fields {
+  font-size: 0.75rem;
+  background: #f8f9fa;
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin: 0 0 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.event-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+button {
+  padding: 6px 12px;
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+button:disabled {
+  background: #bbb;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #78909c;
+}
+
+.btn-warn {
+  background: #ef6c00;
+}
+
+/* ========== 订单列表 ========== */
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.order-id {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.order-state {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.order-state.state-pending_payment {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.order-state.state-paid {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.order-state.state-ticket_issued {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.order-state.state-cancelled {
+  background: #fafafa;
+  color: #757575;
+}
+
+.order-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.order-meta {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.order-actions {
+  display: flex;
+  gap: 6px;
+}
