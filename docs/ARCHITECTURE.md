@@ -210,10 +210,9 @@ PENDING_PAYMENT → PAID → TICKET_ISSUED
 
 | 维度 | my_ai_demo_proj | ticket_demo |
 |------|-----------------|-------------|
-| AI | Spring AI + DeepSeek Tool Calling | 无 |
 | 核心场景 | 聊天订票 | 多租户 SaaS 订票 |
 | 数据模型 | 简单 Booking 状态 | 活动库存 + 订单状态机 |
-| 横切关注 | CORS + ReAct | 租户隔离 + 限流 + 插件 |
+| 横切关注 | CORS | 租户隔离 + 限流 + 插件 |
 | 持久化 | H2 内存库 | **PostgreSQL** + **Redis** |
 
 两者共同点：React + Vite 前端、Spring Boot 三层架构、pnpm workspace、`/api` 代理、Docker Compose。

@@ -1,6 +1,6 @@
 # 多租户订票 SaaS Demo
 
-React + Spring Boot 全栈样例，演示多租户 SaaS 订票系统的核心架构设计要点（**不含 Spring AI**）。
+React + Spring Boot 全栈样例，演示多租户 SaaS 订票系统的核心架构设计要点。
 
 > 仓库地址：[github.com/liweinan/ticket_demo](https://github.com/liweinan/ticket_demo)
 
