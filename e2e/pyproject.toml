@@ -7,12 +7,15 @@ dependencies = [
     "playwright==1.52.0",
     "pytest>=8.3.0",
     "pytest-playwright>=0.7.0",
+    "requests>=2.32.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
 filterwarnings = ["ignore::DeprecationWarning"]
+# API 用例先跑，UI 用例后跑（避免限流影响 UI）
+python_files = ["test_api.py", "test_app.py"]
 
 [tool.pytest_playwright]
 # 容器内无 DISPLAY，使用 headless

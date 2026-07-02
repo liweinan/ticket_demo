@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: order-service
+  config:
+    import: optional:nacos:${spring.application.name}.yaml
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER:localhost:8848}
+      config:
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        file-extension: yaml
+    openfeign:
+      circuitbreaker:
+        enabled: true
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ticketdb}
+    username: ${SPRING_DATASOURCE_USERNAME:ticket}
+    password: ${SPRING_DATASOURCE_PASSWORD:ticket}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+server:
+  port: ${SERVER_PORT:8083}
+
+ticket:
+  snowflake:
+    worker-id: ${SNOWFLAKE_WORKER_ID:2}
+    datacenter-id: ${SNOWFLAKE_DATACENTER_ID:1}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      event-service:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+  retry:
+    instances:
+      event-service:
+        max-attempts: 3
+        wait-duration: 200ms
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.demo.ticket: INFO

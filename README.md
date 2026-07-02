@@ -6,7 +6,7 @@ React + Spring Boot 全栈样例，演示多租户 SaaS 订票系统的核心架
 
 架构风格参考 [my_ai_demo_proj](https://github.com/liweinan/springai_demo)：`controller → service → repository` 分层、Vite 代理、pnpm workspace。
 
-**详细架构说明** → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+**后端已演进为标准分布式架构**：Spring Cloud Gateway + Nacos + Kafka + OpenFeign + Resilience4j，详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ---
 
@@ -34,11 +34,12 @@ React + Spring Boot 全栈样例，演示多租户 SaaS 订票系统的核心架
 |------|--------------|
 | 数据隔离 | 共享表 + `tenant_id`；租户元数据声明三种隔离模式 |
 | 租户识别 | `X-Tenant-ID` Header + `TenantContext` ThreadLocal 透传 |
-| 防噪声邻居 | 金/银/铜租户不同 QPS 限流 |
-| 库存扣减 | **Redis Lua 预占** + PostgreSQL CAS 乐观锁 |
-| 持久化 | **PostgreSQL**（jsonb 扩展字段） |
-| 订单状态机 | `OrderStateMachine` 集中管理合法变迁 |
+| 防噪声邻居 | Gateway **Resilience4j** 按租户 QPS 限流（金/银/铜） |
+| 库存扣减 | **Redis Lua 预占** + PostgreSQL CAS（event-service） |
+| 持久化 | **PostgreSQL**（jsonb 扩展字段，Demo 共享库） |
+| 订单状态机 | `OrderStateMachine` + **Kafka** 订单事件 → audit-service |
 | 分布式 ID | Snowflake 生成订单主键 |
+| 服务治理 | **Nacos** 配置/发现、**OpenFeign** 服务间调用 |
 | 租户定制 | JSON 扩展字段 + 插件化（审批流示例） |
 
 ---
@@ -54,7 +55,7 @@ React + Spring Boot 全栈样例，演示多租户 SaaS 订票系统的核心架
 
 ## Docker 一键启动
 
-启动 **PostgreSQL + Redis + 后端 + 前端** 全套服务：
+启动 **Nacos + Kafka + PostgreSQL + Redis + 5 个微服务 + 前端**：
 
 ```bash
 docker compose up --build
@@ -62,12 +63,18 @@ docker compose up --build
 
 | 服务 | 地址 | 说明 |
 |------|------|------|
-| 前端 | http://localhost:5173 | Vite dev，`/api` 代理到 backend |
-| 后端 | http://localhost:8080 | Spring Boot API |
+| 前端 | http://localhost:5173 | Vite dev，`/api` 代理到 Gateway |
+| API 网关 | http://localhost:8080 | Spring Cloud Gateway（唯一对外入口） |
+| tenant-service | localhost:8081 | 租户元数据 |
+| event-service | localhost:8082 | 活动 + 库存（Redis） |
+| order-service | localhost:8083 | 订单 + Kafka Producer |
+| audit-service | localhost:8084 | Kafka Consumer 审计落库 |
+| Nacos | http://localhost:8848/nacos | 配置/服务发现（默认 nacos/nacos） |
+| Kafka | localhost:9092 | 订单事件 `order.events` |
 | PostgreSQL | localhost:5432 | 库 `ticketdb` / 用户 `ticket` / 密码 `ticket` |
 | Redis | localhost:6379 | 库存预占 |
 
-健康检查：`curl http://localhost:8080/api/health` → `postgresUp` 与 `redisUp` 均为 `true`
+健康检查：`curl http://localhost:8080/api/health`
 
 停止并**清除数据卷**（恢复种子数据）：
 
@@ -79,20 +86,27 @@ docker compose down -v
 
 ## 本地开发（可选）
 
-需先启动 PostgreSQL 与 Redis（可只起基础设施容器）：
+需先启动基础设施（推荐 Docker）：
 
 ```bash
-docker compose up -d postgres redis
+docker compose up -d nacos kafka postgres redis
+# 等待 Nacos 就绪后导入配置
+docker compose run --rm nacos-init
 ```
 
-### 1. 启动后端
+### 1. 编译并启动微服务
 
 ```bash
-cd backend
-mvn spring-boot:run
-```
+# 根目录编译全部模块
+mvn -DskipTests package
 
-默认连接 `localhost:5432` / `localhost:6379`（与 Compose 暴露端口一致）。
+# 按依赖顺序启动（各开终端，或 IDE Run）
+NACOS_SERVER=localhost:8848 SERVER_PORT=8081 java -jar tenant-service/target/*.jar
+NACOS_SERVER=localhost:8848 SERVER_PORT=8082 java -jar event-service/target/*.jar
+NACOS_SERVER=localhost:8848 SERVER_PORT=8083 java -jar order-service/target/*.jar
+NACOS_SERVER=localhost:8848 SERVER_PORT=8084 java -jar audit-service/target/*.jar
+NACOS_SERVER=localhost:8848 SERVER_PORT=8080 java -jar gateway-service/target/*.jar
+```
 
 ### 2. 启动前端
 
@@ -123,8 +137,15 @@ docker compose down -v && docker compose up -d --build
 | `test_switch_tenant_isolates_events` | 切换租户后活动数据隔离 |
 | `test_create_order_and_pay_issue` | 下单 → 支付 → 出票，状态机与库存扣减 |
 | `test_gold_tenant_approval_plugin_blocks_bulk_order` | 金牌租户订 15 张触发审批流插件 |
-| `test_health_api` | `GET /api/health` |
+| `test_health_api` | `GET /api/health`（Gateway 聚合） |
 | `test_tenants_api` | `GET /api/tenants` 返回三个 Demo 租户 |
+| `test_rate_limit_returns_429` | Gateway Resilience4j 租户限流 429 |
+
+共 **7** 个用例。服务已启动时可跳过依赖检查：
+
+```bash
+docker compose --profile test run --rm --no-deps e2e
+```
 
 ### 方式一：Docker 全流程（推荐）
 
@@ -247,19 +268,23 @@ curl -X POST http://localhost:8080/api/orders/ORDER_ID/pay \
 
 ```
 ticket_demo/
-├── docker-compose.yml  # PostgreSQL + Redis + 前后端 + E2E profile
-├── e2e/                # Playwright E2E（uv + pytest）
-│   ├── pyproject.toml
-│   ├── uv.lock
-│   ├── Dockerfile      # 容器化测试
-│   ├── conftest.py
-│   └── tests/test_app.py
-├── backend/            # Spring Boot 3.3
-├── frontend/           # React + Vite + TypeScript
+├── pom.xml                 # Maven 多模块父 POM
+├── docker-compose.yml      # Nacos + Kafka + PG + Redis + 微服务 + 前端
+├── Dockerfile.service      # 微服务统一多阶段镜像
+├── docker/nacos/           # Nacos 预置配置 Data ID
+├── ticket-common/          # 租户上下文、枚举、Snowflake
+├── ticket-api/             # Feign 客户端、跨服务 DTO、Kafka 事件
+├── gateway-service/        # Spring Cloud Gateway + Resilience4j 限流
+├── tenant-service/         # 租户元数据
+├── event-service/          # 活动 + Redis 库存
+├── order-service/          # 订单 + OpenFeign + Kafka Producer
+├── audit-service/          # Kafka Consumer 审计
+├── e2e/                    # Playwright E2E（uv + pytest）
+├── frontend/               # React + Vite + TypeScript
 ├── docs/
 │   ├── ARCHITECTURE.md
-│   └── screenshots/    # README 预览图（pnpm capture-screenshots）
-├── package.json        # pnpm test:e2e / test:e2e:docker
+│   └── screenshots/
+├── package.json
 └── README.md
 ```
 

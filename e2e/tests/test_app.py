@@ -1,11 +1,7 @@
 """
-多租户订票 SaaS Demo — Playwright E2E 测试。
+多租户订票 SaaS Demo — Playwright UI E2E 测试。
 
-依赖：
-- backend :8080（PostgreSQL 种子数据 + Redis 库存）
-- frontend :5173
-
-串行执行：部分用例会修改订单/库存状态。
+依赖：gateway-service :8080、frontend :5173
 """
 
 import re
@@ -15,16 +11,19 @@ from playwright.sync_api import Page, expect
 
 
 @pytest.fixture(autouse=True)
-def goto_home(page: Page):
-    """每个用例从首页开始。"""
-    page.goto("/")
+def goto_home(request, page: Page):
+    """仅 UI 用例（声明了 page 参数）才打开首页。"""
+    if "page" not in request.fixturenames:
+        yield
+        return
+    page.goto("/", wait_until="domcontentloaded")
     expect(page.get_by_role("heading", name="多租户订票 SaaS Demo")).to_be_visible(
         timeout=30_000
     )
+    yield
 
 
 def _events_panel(page: Page):
-    """活动列表面板（避免与订单列表中的同名标题冲突）。"""
     return page.locator(".panel").filter(has=page.get_by_role("heading", name="票务活动"))
 
 
@@ -36,8 +35,10 @@ def _select_tenant(page: Page, tenant_name: str) -> None:
     page.get_by_role("button", name=re.compile(tenant_name)).click()
 
 
-def _first_event_card(page: Page):
-    return _events_panel(page).locator(".event-card").first
+def _wait_tenant_events(page: Page, event_title: str) -> None:
+    """切换租户后等待活动列表刷新完成。"""
+    events = _events_panel(page)
+    expect(events.get_by_role("heading", name=event_title)).to_be_visible(timeout=15_000)
 
 
 def test_initial_load_silver_tenant(page: Page):
@@ -54,60 +55,59 @@ def test_switch_tenant_isolates_events(page: Page):
     expect(events.get_by_role("heading", name="周末话剧 · 雷雨")).to_be_visible()
 
     _select_tenant(page, "铜牌小微租户")
-    expect(events.get_by_role("heading", name="社区电影之夜")).to_be_visible()
+    _wait_tenant_events(page, "社区电影之夜")
     expect(events.get_by_role("heading", name="周末话剧 · 雷雨")).not_to_be_visible()
 
     _select_tenant(page, "金牌企业租户")
-    expect(events.get_by_role("heading", name=re.compile("春季演唱会"))).to_be_visible()
+    _wait_tenant_events(page, re.compile("春季演唱会"))
     expect(events.get_by_role("heading", name="社区电影之夜")).not_to_be_visible()
+
+    # 恢复默认租户，减少后续用例干扰
+    _select_tenant(page, "银牌 SaaS 租户")
+    _wait_tenant_events(page, "周末话剧 · 雷雨")
 
 
 def test_create_order_and_pay_issue(page: Page):
     """下单 → 支付 → 出票，验证状态机流转与库存减少。"""
     _select_tenant(page, "银牌 SaaS 租户")
+    _wait_tenant_events(page, "周末话剧 · 雷雨")
 
-    event = _first_event_card(page)
+    events = _events_panel(page)
+    event = events.locator(".event-card").filter(
+        has=page.get_by_role("heading", name="周末话剧 · 雷雨")
+    )
+    expect(event).to_be_visible()
+
     stock_text = event.locator(".event-stock strong")
     stock_before = int((stock_text.text_content() or "0").strip())
+    pending_before = _orders_panel(page).locator(".order-card.state-pending_payment").count()
 
-    event.get_by_role("button", name="订 1 张").click()
+    event.get_by_role("button", name=re.compile(r"订 1 张")).click()
 
     orders = _orders_panel(page)
-    expect(orders.get_by_text("待支付")).to_be_visible(timeout=15_000)
+    expect(orders.locator(".order-card.state-pending_payment")).to_have_count(
+        pending_before + 1, timeout=15_000
+    )
     expect(stock_text).to_have_text(str(stock_before - 1), timeout=15_000)
 
-    orders.get_by_role("button", name="支付").first.click()
-    expect(orders.get_by_text("已支付")).to_be_visible(timeout=15_000)
+    new_order = orders.locator(".order-card").filter(
+        has_text="周末话剧 · 雷雨"
+    ).filter(has=page.locator(".state-pending_payment")).first
+    expect(new_order).to_be_visible()
 
-    orders.get_by_role("button", name="出票").first.click()
-    expect(orders.get_by_text("已出票")).to_be_visible(timeout=15_000)
+    new_order.get_by_role("button", name="支付").click()
+    expect(new_order).to_have_class(re.compile(r"state-paid"), timeout=15_000)
+
+    new_order.get_by_role("button", name="出票").click()
+    expect(new_order).to_have_class(re.compile(r"state-ticket_issued"), timeout=15_000)
 
 
 def test_gold_tenant_approval_plugin_blocks_bulk_order(page: Page):
     """金牌租户订 15 张触发审批流插件拦截。"""
     _select_tenant(page, "金牌企业租户")
+    _wait_tenant_events(page, re.compile("春季演唱会"))
 
-    event = _first_event_card(page)
+    event = _events_panel(page).locator(".event-card").first
     event.get_by_role("button", name=re.compile("订 15 张")).click()
 
     expect(page.locator(".error-banner")).to_contain_text("审批", timeout=15_000)
-
-
-def test_health_api(api_url: str, page: Page):
-    """健康检查 API 可访问。"""
-    response = page.request.get(f"{api_url}/api/health")
-    assert response.ok
-    body = response.json()
-    assert body["status"] == "UP"
-    assert body["postgresUp"] is True
-    assert body["redisUp"] is True
-
-
-def test_tenants_api(api_url: str, page: Page):
-    """租户列表 API 返回三个 Demo 租户。"""
-    response = page.request.get(f"{api_url}/api/tenants")
-    assert response.ok
-    tenants = response.json()
-    assert len(tenants) == 3
-    ids = {t["tenantId"] for t in tenants}
-    assert ids == {"tenant-gold", "tenant-silver", "tenant-bronze"}

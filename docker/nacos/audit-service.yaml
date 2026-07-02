@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/ticketdb
+    username: ticket
+    password: ticket
+  kafka:
+    bootstrap-servers: kafka:9092
+    consumer:
+      group-id: audit-service-group

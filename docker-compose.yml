@@ -1,17 +1,77 @@
-# 一键启动：PostgreSQL + Redis + 前后端
+# 分布式微服务一键启动：Nacos + Kafka + PostgreSQL + Redis + 5 个 Java 服务 + 前端
 #
 # 用法：
 #   docker compose up --build
 #
-# 运行 E2E：
+# E2E 测试：
 #   docker compose --profile test run --rm e2e
 #
-# 重置数据（清库 + 种子数据）：
+# 重置数据：
 #   docker compose down -v && docker compose up -d --build
 #
-# 前端 http://localhost:5173  后端 http://localhost:8080
+# 入口：前端 http://localhost:5173  API 网关 http://localhost:8080
+# Nacos 控制台 http://localhost:8848/nacos  (nacos/nacos)
 
 services:
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      JVM_XMS: 128m
+      JVM_XMX: 256m
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    ports:
+      - "8848:8848"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+
+  nacos-init:
+    image: curlimages/curl:8.11.1
+    volumes:
+      - ./docker/nacos:/nacos-config:ro
+    entrypoint: ["/bin/sh", "/nacos-config/import-config.sh"]
+    environment:
+      NACOS_SERVER: http://nacos:8848
+    depends_on:
+      nacos:
+        condition: service_healthy
+
+  kafka:
+    image: apache/kafka:3.7.1
+    platform: linux/amd64
+    hostname: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -41,30 +101,159 @@ services:
       timeout: 3s
       retries: 12
 
-  backend:
+  tenant-service:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: tenant-service
     ports:
-      - "8080:8080"
+      - "8081:8081"
     environment:
+      SERVER_PORT: 8081
+      NACOS_SERVER: nacos:8848
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ticketdb
+      SPRING_DATASOURCE_USERNAME: ticket
+      SPRING_DATASOURCE_PASSWORD: ticket
+    depends_on:
+      nacos:
+        condition: service_healthy
+      nacos-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 120s
+
+  event-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: event-service
+    ports:
+      - "8082:8082"
+    environment:
+      SERVER_PORT: 8082
+      NACOS_SERVER: nacos:8848
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ticketdb
       SPRING_DATASOURCE_USERNAME: ticket
       SPRING_DATASOURCE_PASSWORD: ticket
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      LOGGING_LEVEL_COM_DEMO_TICKET: INFO
     depends_on:
+      nacos:
+        condition: service_healthy
+      nacos-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 120s
+
+  order-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: order-service
+    ports:
+      - "8083:8083"
+    environment:
+      SERVER_PORT: 8083
+      NACOS_SERVER: nacos:8848
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ticketdb
+      SPRING_DATASOURCE_USERNAME: ticket
+      SPRING_DATASOURCE_PASSWORD: ticket
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SNOWFLAKE_WORKER_ID: 2
+    depends_on:
+      nacos:
+        condition: service_healthy
+      nacos-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      event-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 120s
+
+  audit-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: audit-service
+    ports:
+      - "8084:8084"
+    environment:
+      SERVER_PORT: 8084
+      NACOS_SERVER: nacos:8848
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ticketdb
+      SPRING_DATASOURCE_USERNAME: ticket
+      SPRING_DATASOURCE_PASSWORD: ticket
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      nacos:
+        condition: service_healthy
+      nacos-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 120s
+
+  gateway-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: gateway-service
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_PORT: 8080
+      NACOS_SERVER: nacos:8848
+    depends_on:
+      nacos:
+        condition: service_healthy
+      nacos-init:
+        condition: service_completed_successfully
+      tenant-service:
+        condition: service_healthy
+      event-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+    healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 90s
+      retries: 18
+      start_period: 150s
 
   frontend:
     build:
@@ -73,9 +262,9 @@ services:
     ports:
       - "5173:5173"
     environment:
-      VITE_API_PROXY_TARGET: http://backend:8080
+      VITE_API_PROXY_TARGET: http://gateway-service:8080
     depends_on:
-      backend:
+      gateway-service:
         condition: service_healthy
 
   e2e:
@@ -94,7 +283,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      backend:
+      gateway-service:
         condition: service_healthy
       frontend:
         condition: service_started

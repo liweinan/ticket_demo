@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: tenant-service
+  config:
+    import: optional:nacos:${spring.application.name}.yaml
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER:localhost:8848}
+      config:
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        file-extension: yaml
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ticketdb}
+    username: ${SPRING_DATASOURCE_USERNAME:ticket}
+    password: ${SPRING_DATASOURCE_PASSWORD:ticket}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    defer-datasource-initialization: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  sql:
+    init:
+      mode: always
+      continue-on-error: true
+
+server:
+  port: ${SERVER_PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.demo.ticket: INFO

@@ -1,0 +1,10 @@
+tenant:
+  rate-limit:
+    gold: 100
+    silver: 30
+    bronze: 10
+    default-qps: 10
+
+logging:
+  level:
+    com.demo.ticket.gateway: INFO

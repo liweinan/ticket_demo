@@ -44,3 +44,11 @@ def wait_for_services(base_url: str, api_url: str):
 @pytest.fixture(scope="session")
 def api_url() -> str:
     return API_URL
+
+
+@pytest.fixture(scope="session")
+def http() -> requests.Session:
+    """共享 HTTP 会话，API 测试不走代理。"""
+    session = requests.Session()
+    session.trust_env = False
+    return session

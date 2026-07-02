@@ -1,0 +1,26 @@
+# 多阶段构建：从父 POM 编译指定微服务模块
+# 用法：docker build --build-arg SERVICE=gateway-service -f Dockerfile.service .
+ARG SERVICE=gateway-service
+
+FROM maven:3.9-eclipse-temurin-21 AS build
+ARG SERVICE
+WORKDIR /app
+COPY pom.xml .
+COPY ticket-common ticket-common
+COPY ticket-api ticket-api
+COPY gateway-service gateway-service
+COPY tenant-service tenant-service
+COPY event-service event-service
+COPY order-service order-service
+COPY audit-service audit-service
+RUN mvn -pl ${SERVICE} -am -DskipTests package
+
+FROM eclipse-temurin:21-jre-alpine
+ARG SERVICE
+WORKDIR /app
+RUN apk add --no-cache curl
+COPY --from=build /app/${SERVICE}/target/*.jar app.jar
+EXPOSE 8080
+HEALTHCHECK --interval=10s --timeout=5s --retries=18 --start-period=120s \
+  CMD curl -f http://localhost:${SERVER_PORT:-8080}/api/health || curl -f http://localhost:${SERVER_PORT:-8080}/actuator/health || exit 1
+ENTRYPOINT ["java", "-jar", "app.jar"]
