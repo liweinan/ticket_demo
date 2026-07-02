@@ -22,6 +22,11 @@ flowchart TB
     Proxy["/api → :8080"]
   end
 
+  subgraph infra [Docker Compose 基础设施]
+    PG[(PostgreSQL)]
+    RD[(Redis)]
+  end
+
   subgraph backend [Spring Boot localhost:8080]
     TI[TenantInterceptor]
     RL[TenantRateLimiter]
@@ -29,11 +34,11 @@ flowchart TB
     OC[OrderController]
     OS[OrderService]
     IS[InventoryService]
-    IC[InMemoryInventoryCache]
+    IC[RedisInventoryCache]
+    WU[InventoryCacheWarmup]
     SM[OrderStateMachine]
     SF[SnowflakeIdGenerator]
     PR[PluginRegistry]
-    DB[(H2 共享表 + tenant_id)]
     App --> Proxy
     Proxy --> TI
     TI --> RL
@@ -45,7 +50,9 @@ flowchart TB
     OS --> SF
     OS --> PR
     IS --> IC
-    OS --> DB
+    IC --> RD
+    WU --> IC
+    OS --> PG
   end
 ```
 
@@ -86,17 +93,17 @@ HTTP Request
 ### 2.3 高并发库存扣减（两阶段）
 
 ```
-1. InMemoryInventoryCache.tryReserve()   ← 模拟 Redis 原子预占
-2. TicketEventRepository.deductStockCas() ← DB 乐观锁 CAS
-3. 若 2 失败 → release 回滚预占
+1. RedisInventoryCache.tryReserve()      ← Lua 脚本原子预占
+2. TicketEventRepository.deductStockCas() ← PostgreSQL 乐观锁 CAS
+3. 若 2 失败 → release 回滚 Redis
+4. 启动时 InventoryCacheWarmup 将 PG 库存同步至 Redis
 ```
 
 关键文件：
 - `inventory/InventoryService.java`
-- `inventory/InMemoryInventoryCache.java`
+- `inventory/RedisInventoryCache.java`
+- `inventory/InventoryCacheWarmup.java`
 - `repository/TicketEventRepository.java` — `@Query` CAS 更新
-
-> 生产环境将 `InMemoryInventoryCache` 替换为 Redis `DECRBY` 即可，接口不变。
 
 ### 2.4 订单状态机
 
@@ -121,7 +128,7 @@ PENDING_PAYMENT → PAID → TICKET_ISSUED
 
 ### 2.6 扩展字段与插件化
 
-- **扩展字段**：`TicketEvent.extensionFields`（JSON），避免 per-tenant 改表
+- **扩展字段**：`TicketEvent.extensionFields`（PostgreSQL `jsonb`），避免 per-tenant 改表
 - **插件**：`OrderPlugin` 接口 + `PluginRegistry` 按租户 `enabled_plugins` 加载
 - **示例**：金牌租户启用 `approval-workflow`，quantity > 10 拦截
 
@@ -207,15 +214,16 @@ PENDING_PAYMENT → PAID → TICKET_ISSUED
 | 核心场景 | 聊天订票 | 多租户 SaaS 订票 |
 | 数据模型 | 简单 Booking 状态 | 活动库存 + 订单状态机 |
 | 横切关注 | CORS + ReAct | 租户隔离 + 限流 + 插件 |
+| 持久化 | H2 内存库 | **PostgreSQL** + **Redis** |
 
-两者共同点：React + Vite 前端、Spring Boot 三层架构、H2 内存库、pnpm workspace、`/api` 代理。
+两者共同点：React + Vite 前端、Spring Boot 三层架构、pnpm workspace、`/api` 代理、Docker Compose。
 
 ---
 
 ## 8. 可扩展方向
 
 1. 实现 Schema / 独立库路由（Hibernate Multi-Tenancy）
-2. 接入真实 Redis + 延迟队列异步落库
+2. Redis 延迟队列异步落库
 3. JWT 登录替代 Header 直传
 4. API 网关统一限流（Kong / Spring Cloud Gateway）
 5. 改签、退款完整状态机分支

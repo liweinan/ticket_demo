@@ -7,7 +7,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -47,8 +48,9 @@ public class Order {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    /** 下单时的扩展快照（JSON 字符串；生产环境可用 PostgreSQL jsonb） */
-    @Column(name = "extension_snapshot", length = 2048)
+    /** 下单时的扩展快照（PostgreSQL jsonb） */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "extension_snapshot", columnDefinition = "jsonb")
     private String extensionSnapshot = "{}";
 
     public Long getId() {

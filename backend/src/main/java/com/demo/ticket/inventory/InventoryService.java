@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
  * <p>
  * 【高并发库存扣减 - 核心流程】
  * <ol>
- *   <li>Redis/内存原子预占 — 快速挡掉明显超卖</li>
+ *   <li>Redis 原子预占（Lua 脚本）— 快速挡掉明显超卖</li>
  *   <li>DB CAS 扣减（带 version）— 持久化与最终一致</li>
  *   <li>若 DB 失败，回滚 Redis 预占</li>
  * </ol>

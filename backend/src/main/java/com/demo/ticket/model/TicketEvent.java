@@ -7,13 +7,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 票务活动实体（共享表模式，{@code tenant_id} 逻辑隔离）。
  * <p>
  * 【扩展字段设计】{@code extensionFields} 以 JSON 存储租户个性化配置
  * （座位图、实名要求等），避免为每个租户改表结构。
- * 生产 PostgreSQL 可改用 {@code jsonb} 并建 GIN 索引。
+ * 使用 PostgreSQL {@code jsonb} 列类型，可建 GIN 索引加速查询。
  * </p>
  * <p>
  * 【乐观锁】{@code version} 配合 CAS 扣减库存，防止并发超卖。
@@ -47,11 +49,9 @@ public class TicketEvent {
     @Version
     private long version;
 
-    /**
-     * 租户扩展字段（JSON 字符串）。
-     * 生产 PostgreSQL 可改用 jsonb 列类型并建 GIN 索引。
-     */
-    @Column(name = "extension_fields", length = 2048)
+    /** 租户扩展字段（PostgreSQL jsonb） */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "extension_fields", columnDefinition = "jsonb")
     private String extensionFields = "{}";
 
     public Long getId() {

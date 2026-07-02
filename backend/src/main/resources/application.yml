@@ -1,17 +1,17 @@
 # ============================================================
 # 多租户订票 SaaS Demo - 后端配置
+# 默认连接 localhost PostgreSQL + Redis；Docker Compose 通过环境变量覆盖
 # ============================================================
 
 spring:
   application:
     name: ticket-saas-demo
 
-  # H2 内存数据库（共享表 + tenant_id 模式）
   datasource:
-    url: jdbc:h2:mem:ticketdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ticketdb}
+    username: ${SPRING_DATASOURCE_USERNAME:ticket}
+    password: ${SPRING_DATASOURCE_PASSWORD:ticket}
+    driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
@@ -20,17 +20,22 @@ spring:
     defer-datasource-initialization: true
     properties:
       hibernate:
-        # 与 PostgreSQL jsonb 扩展字段设计对齐（H2 用 JSON 类型模拟）
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
   sql:
     init:
       mode: always
 
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      timeout: 3000ms
+
 server:
   port: 8080
 
-# Snowflake 工作节点 ID（分布式部署时每实例不同）
 ticket:
   snowflake:
     worker-id: ${SNOWFLAKE_WORKER_ID:1}

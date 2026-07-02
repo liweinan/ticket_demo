@@ -5,9 +5,16 @@ package com.demo.ticket.dto;
  */
 public record HealthResponse(
         String status,
-        String message
+        String message,
+        boolean postgresUp,
+        boolean redisUp
 ) {
-    public static HealthResponse ok() {
-        return new HealthResponse("UP", "ticket-saas-demo 运行正常");
+    public static HealthResponse of(boolean postgresUp, boolean redisUp) {
+        boolean up = postgresUp && redisUp;
+        return new HealthResponse(
+                up ? "UP" : "DEGRADED",
+                up ? "ticket-saas-demo 运行正常" : "PostgreSQL 或 Redis 不可用",
+                postgresUp,
+                redisUp);
     }
 }

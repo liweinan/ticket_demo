@@ -1,14 +1,46 @@
-# 一键启动前后端（开发模式）
+# 一键启动：PostgreSQL + Redis + 前后端
 #
 # 用法：
 #   docker compose up --build
 #
-# 运行 E2E 测试（需先启动 backend + frontend）：
+# 运行 E2E：
 #   docker compose --profile test run --rm e2e
+#
+# 重置数据（清库 + 种子数据）：
+#   docker compose down -v && docker compose up -d --build
 #
 # 前端 http://localhost:5173  后端 http://localhost:8080
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ticketdb
+      POSTGRES_USER: ticket
+      POSTGRES_PASSWORD: ticket
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ticket -d ticketdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   backend:
     build:
       context: ./backend
@@ -16,13 +48,23 @@ services:
     ports:
       - "8080:8080"
     environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ticketdb
+      SPRING_DATASOURCE_USERNAME: ticket
+      SPRING_DATASOURCE_PASSWORD: ticket
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
       LOGGING_LEVEL_COM_DEMO_TICKET: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 60s
+      start_period: 90s
 
   frontend:
     build:
@@ -31,7 +73,6 @@ services:
     ports:
       - "5173:5173"
     environment:
-      # Vite 容器内通过服务名访问 backend
       VITE_API_PROXY_TARGET: http://backend:8080
     depends_on:
       backend:
@@ -45,7 +86,6 @@ services:
     environment:
       BASE_URL: http://host.docker.internal:5173
       API_URL: http://host.docker.internal:8080
-      # 避免继承宿主机代理，导致容器内无法访问服务
       HTTP_PROXY: ""
       HTTPS_PROXY: ""
       http_proxy: ""
@@ -58,3 +98,7 @@ services:
         condition: service_healthy
       frontend:
         condition: service_started
+
+volumes:
+  postgres_data:
+  redis_data:

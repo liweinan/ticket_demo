@@ -2,7 +2,7 @@
 多租户订票 SaaS Demo — Playwright E2E 测试。
 
 依赖：
-- backend :8080（H2 种子数据）
+- backend :8080（PostgreSQL 种子数据 + Redis 库存）
 - frontend :5173
 
 串行执行：部分用例会修改订单/库存状态。
@@ -99,6 +99,8 @@ def test_health_api(api_url: str, page: Page):
     assert response.ok
     body = response.json()
     assert body["status"] == "UP"
+    assert body["postgresUp"] is True
+    assert body["redisUp"] is True
 
 
 def test_tenants_api(api_url: str, page: Page):

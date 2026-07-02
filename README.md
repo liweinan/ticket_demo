@@ -35,7 +35,8 @@ React + Spring Boot 全栈样例，演示多租户 SaaS 订票系统的核心架
 | 数据隔离 | 共享表 + `tenant_id`；租户元数据声明三种隔离模式 |
 | 租户识别 | `X-Tenant-ID` Header + `TenantContext` ThreadLocal 透传 |
 | 防噪声邻居 | 金/银/铜租户不同 QPS 限流 |
-| 库存扣减 | 内存预占（模拟 Redis）+ 数据库 CAS 乐观锁 |
+| 库存扣减 | **Redis Lua 预占** + PostgreSQL CAS 乐观锁 |
+| 持久化 | **PostgreSQL**（jsonb 扩展字段） |
 | 订单状态机 | `OrderStateMachine` 集中管理合法变迁 |
 | 分布式 ID | Snowflake 生成订单主键 |
 | 租户定制 | JSON 扩展字段 + 插件化（审批流示例） |
@@ -47,28 +48,42 @@ React + Spring Boot 全栈样例，演示多租户 SaaS 订票系统的核心架
 - Java 17+、Maven
 - [pnpm](https://pnpm.io/installation) 9+
 - [uv](https://docs.astral.sh/uv/)（E2E 测试，Python 包管理）
-- [Docker](https://docs.docker.com/get-docker/) + Docker Compose（可选，一键启动）
+- [Docker](https://docs.docker.com/get-docker/) + Docker Compose（**推荐**，含 PostgreSQL + Redis）
 
 ---
 
 ## Docker 一键启动
 
-需已安装 Docker 与 Docker Compose。
+启动 **PostgreSQL + Redis + 后端 + 前端** 全套服务：
 
 ```bash
 docker compose up --build
 ```
 
-| 地址 | 说明 |
-|------|------|
-| http://localhost:5173 | 前端（Vite dev，`/api` 代理到 backend） |
-| http://localhost:8080 | 后端 API |
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| 前端 | http://localhost:5173 | Vite dev，`/api` 代理到 backend |
+| 后端 | http://localhost:8080 | Spring Boot API |
+| PostgreSQL | localhost:5432 | 库 `ticketdb` / 用户 `ticket` / 密码 `ticket` |
+| Redis | localhost:6379 | 库存预占 |
 
-停止：`docker compose down`
+健康检查：`curl http://localhost:8080/api/health` → `postgresUp` 与 `redisUp` 均为 `true`
+
+停止并**清除数据卷**（恢复种子数据）：
+
+```bash
+docker compose down -v
+```
 
 ---
 
-## 快速启动
+## 本地开发（可选）
+
+需先启动 PostgreSQL 与 Redis（可只起基础设施容器）：
+
+```bash
+docker compose up -d postgres redis
+```
 
 ### 1. 启动后端
 
@@ -77,23 +92,28 @@ cd backend
 mvn spring-boot:run
 ```
 
-→ `http://localhost:8080`
+默认连接 `localhost:5432` / `localhost:6379`（与 Compose 暴露端口一致）。
 
 ### 2. 启动前端
 
 ```bash
-cd ticket_demo   # 项目根目录
 pnpm install
 pnpm dev
 ```
 
-→ `http://localhost:5173`
+→ http://localhost:5173
 
 ---
 
 ## 测试流程
 
-E2E 测试位于 `e2e/`，使用 **Playwright（Python）+ uv + pytest**。测试串行执行，部分用例会修改库存与订单状态；H2 为内存库，**重启 backend 可恢复种子数据**。
+E2E 测试位于 `e2e/`，使用 **Playwright（Python）+ uv + pytest**。测试串行执行，部分用例会修改库存与订单状态。
+
+**重置测试数据**（PostgreSQL 持久化卷）：
+
+```bash
+docker compose down -v && docker compose up -d --build
+```
 
 ### 测试用例
 
@@ -121,17 +141,17 @@ docker compose --profile test run --rm e2e
 pnpm test:e2e:docker
 ```
 
-如需干净数据（避免多次测试后库存/订单干扰）：
+如需干净数据：
 
 ```bash
-docker compose restart backend
-sleep 8
+docker compose down -v && docker compose up -d --build
+sleep 15
 docker compose --profile test run --rm e2e
 ```
 
 ### 方式二：本地 Playwright
 
-需已启动 backend（8080）与 frontend（5173），可用 Docker 或「快速启动」一节的手动方式。
+需已启动全套服务（`docker compose up -d` 或本地 backend + frontend，且 **PostgreSQL / Redis 可用**）。
 
 ```bash
 # 1. 首次：安装 Python 依赖与 Chromium
@@ -172,7 +192,7 @@ NO_PROXY='*' uv run pytest tests/ -v
 
 ```bash
 docker compose up -d
-docker compose restart backend && sleep 8   # 可选：恢复种子数据
+docker compose down -v && docker compose up -d --build   # 可选：恢复种子数据
 pnpm capture-screenshots
 ```
 
@@ -227,7 +247,7 @@ curl -X POST http://localhost:8080/api/orders/ORDER_ID/pay \
 
 ```
 ticket_demo/
-├── docker-compose.yml  # 一键启动前后端 + E2E profile
+├── docker-compose.yml  # PostgreSQL + Redis + 前后端 + E2E profile
 ├── e2e/                # Playwright E2E（uv + pytest）
 │   ├── pyproject.toml
 │   ├── uv.lock
