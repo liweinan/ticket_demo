@@ -267,6 +267,51 @@ services:
       gateway-service:
         condition: service_healthy
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    environment:
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      NO_PROXY: "*"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      gateway-service:
+        condition: service_healthy
+      tenant-service:
+        condition: service_healthy
+      event-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      audit-service:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      NO_PROXY: "*"
+    volumes:
+      - ./docker/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./docker/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
   e2e:
     profiles: ["test"]
     build:

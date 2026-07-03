@@ -2,7 +2,9 @@ spring:
   application:
     name: order-service
   config:
-    import: optional:nacos:${spring.application.name}.yaml
+    import:
+      - optional:classpath:application-metrics.yml
+      - optional:nacos:${spring.application.name}.yaml
   cloud:
     nacos:
       discovery:
@@ -48,12 +50,6 @@ resilience4j:
       event-service:
         max-attempts: 3
         wait-duration: 200ms
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
 
 logging:
   level:

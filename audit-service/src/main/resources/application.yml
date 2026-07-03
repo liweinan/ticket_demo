@@ -2,7 +2,9 @@ spring:
   application:
     name: audit-service
   config:
-    import: optional:nacos:${spring.application.name}.yaml
+    import:
+      - optional:classpath:application-metrics.yml
+      - optional:nacos:${spring.application.name}.yaml
   cloud:
     nacos:
       discovery:
@@ -34,12 +36,6 @@ spring:
 
 server:
   port: ${SERVER_PORT:8084}
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
 
 logging:
   level:

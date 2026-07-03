@@ -15,8 +15,6 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Gateway 层 Resilience4j 租户限流 — 替换单体应用内存滑动窗口。
@@ -24,10 +22,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TenantRateLimitFilter implements GatewayFilter {
 
     private final TenantRateLimitProperties properties;
-    private final Map<String, RateLimiter> limiterCache = new ConcurrentHashMap<>();
+    private final RateLimiterRegistry rateLimiterRegistry;
 
-    public TenantRateLimitFilter(TenantRateLimitProperties properties) {
+    public TenantRateLimitFilter(
+            TenantRateLimitProperties properties,
+            RateLimiterRegistry rateLimiterRegistry) {
         this.properties = properties;
+        this.rateLimiterRegistry = rateLimiterRegistry;
     }
 
     @Override
@@ -46,17 +47,11 @@ public class TenantRateLimitFilter implements GatewayFilter {
         TenantTier tier = exchange.getAttribute("tenantTier");
         int maxQps = properties.resolveMaxQps(tier, tenantMaxQps != null ? tenantMaxQps : 0);
 
-        RateLimiter limiter = limiterCache.compute(tenantId, (key, existing) -> {
-            if (existing != null) {
-                return existing;
-            }
-            RateLimiterConfig config = RateLimiterConfig.custom()
+        RateLimiter limiter = rateLimiterRegistry.rateLimiter(tenantId, () -> RateLimiterConfig.custom()
                     .limitForPeriod(maxQps)
                     .limitRefreshPeriod(Duration.ofSeconds(1))
                     .timeoutDuration(Duration.ZERO)
-                    .build();
-            return RateLimiterRegistry.of(config).rateLimiter(key);
-        });
+                    .build());
 
         try {
             if (!limiter.acquirePermission()) {

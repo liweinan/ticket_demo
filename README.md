@@ -28,6 +28,19 @@ React + Spring Boot 全栈样例，演示多租户 SaaS 订票系统的核心架
 
 ---
 
+## 可观测性预览
+
+`docker compose up --build` 启动后，Prometheus 采集各微服务 `/actuator/prometheus`，Grafana 预置 **Ticket Demo → JVM (Micrometer)** Dashboard（社区模板 4701）。
+
+| Grafana JVM Dashboard（order-service） | Prometheus Targets（4/5 up） |
+|:---:|:---:|
+| ![Grafana JVM Dashboard](docs/screenshots/06-grafana-jvm-dashboard.png) | ![Prometheus Targets](docs/screenshots/07-prometheus-targets.png) |
+
+- Grafana：http://localhost:3000（`admin` / `admin`），选择 Application = `order-service` 查看 JVM/CPU 指标
+- Prometheus：http://localhost:9090/targets，4 个业务服务 UP；`gateway-service` 需容器正常启动后才会 UP
+
+---
+
 ## 设计要点一览
 
 | 主题 | Demo 中的体现 |
@@ -74,8 +87,17 @@ docker compose up --build
 | Kafka | localhost:9092 | 订单事件 `order.events` |
 | PostgreSQL | localhost:5432 | 库 `ticketdb` / 用户 `ticket` / 密码 `ticket` |
 | Redis | localhost:6379 | 库存预占 |
+| Prometheus | http://localhost:9090 | 指标采集（scrape 5 个微服务 `/actuator/prometheus`） |
+| Grafana | http://localhost:3000 | 可视化（默认 `admin` / `admin`，预置 Spring Boot Dashboard） |
 
 健康检查：`curl http://localhost:8080/api/health`
+
+Prometheus 指标验证：
+
+```bash
+curl -s http://localhost:8083/actuator/prometheus | head
+# 浏览器打开 http://localhost:9090/targets 应看到 5 个 UP
+```
 
 停止并**清除数据卷**（恢复种子数据）：
 

@@ -174,5 +174,6 @@ Topic：`order.events`，key=`tenantId`。事件类型：`ORDER_CREATED|PAID|ISS
 1. 各服务独立数据库（当前 Demo 共享 PG 降低复杂度）
 2. 下单失败补偿（Outbox / Saga 归还库存）
 3. JWT 替代 Header 直传
-4. Micrometer Tracing + Zipkin 全链路追踪
-5. K8s Helm 部署（基于 `Dockerfile.service` 镜像）
+4. **Micrometer + Prometheus + Grafana 可观测性**（Demo 已集成：JVM/HTTP/Resilience4j 指标；与 Zipkin 链路追踪互补——metrics 看趋势与告警，tracing 看单次请求路径）
+5. Micrometer Tracing + Zipkin 全链路追踪
+6. K8s Helm 部署（基于 `Dockerfile.service` 镜像）

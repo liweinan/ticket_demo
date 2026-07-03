@@ -4,7 +4,9 @@ spring:
   main:
     web-application-type: reactive
   config:
-    import: optional:nacos:${spring.application.name}.yaml
+    import:
+      - optional:classpath:application-metrics.yml
+      - optional:nacos:${spring.application.name}.yaml
   cloud:
     nacos:
       discovery:
@@ -48,7 +50,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info,gateway,prometheus
+  metrics:
+    enable:
+      spring.cloud.gateway: true
 
 logging:
   level:

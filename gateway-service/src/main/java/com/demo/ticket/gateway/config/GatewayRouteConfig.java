@@ -62,7 +62,8 @@ public class GatewayRouteConfig {
 
     @Bean
     public TenantRateLimitFilter tenantRateLimitFilter(
-            com.demo.ticket.gateway.ratelimit.TenantRateLimitProperties properties) {
-        return new TenantRateLimitFilter(properties);
+            com.demo.ticket.gateway.ratelimit.TenantRateLimitProperties properties,
+            io.github.resilience4j.ratelimiter.RateLimiterRegistry rateLimiterRegistry) {
+        return new TenantRateLimitFilter(properties, rateLimiterRegistry);
     }
 }
