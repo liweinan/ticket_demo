@@ -65,9 +65,9 @@ flowchart TB
   RL --> TSC
   RL --> ESC
   RL --> OSC
-  OSC -->|OpenFeign /internal| ESC
+  OSC -->|OpenFeign internal| ESC
   OSC -->|publish| TOPIC
-  TOPIC -->|@KafkaListener| ASC
+  TOPIC -->|KafkaListener consume| ASC
   TSC --> PG
   ESC --> PG
   ESC --> RD
@@ -75,9 +75,17 @@ flowchart TB
   ASC --> PG
   GW --> NC
   GW --> ND
-  TSC & ESC & OSC & ASC -.->|Maven 依赖| TC
-  OSC & ESC -.->|Feign 契约| TA
-  GW & TSC & ESC & OSC & ASC -->|/actuator/prometheus| Prom
+  TSC -.->|Maven 依赖| TC
+  ESC -.->|Maven 依赖| TC
+  OSC -.->|Maven 依赖| TC
+  ASC -.->|Maven 依赖| TC
+  OSC -.->|Feign 契约| TA
+  ESC -.->|Feign 契约| TA
+  GW -->|actuator prometheus| Prom
+  TSC -->|actuator prometheus| Prom
+  ESC -->|actuator prometheus| Prom
+  OSC -->|actuator prometheus| Prom
+  ASC -->|actuator prometheus| Prom
   Prom --> Graf
 ```
 
