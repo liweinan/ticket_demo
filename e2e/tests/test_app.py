@@ -33,10 +33,11 @@ def _orders_panel(page: Page):
 
 def _select_tenant(page: Page, tenant_name: str) -> None:
     page.get_by_role("button", name=re.compile(tenant_name)).click()
+    # 等待租户切换后活动列表刷新（避免读到上一租户缓存）
+    expect(_events_panel(page).locator(".event-card").first).to_be_visible(timeout=15_000)
 
 
-def _wait_tenant_events(page: Page, event_title: str) -> None:
-    """切换租户后等待活动列表刷新完成。"""
+def _wait_tenant_events(page: Page, event_title: str | re.Pattern[str]) -> None:
     events = _events_panel(page)
     expect(events.get_by_role("heading", name=event_title)).to_be_visible(timeout=15_000)
 
@@ -80,26 +81,28 @@ def test_create_order_and_pay_issue(page: Page):
 
     stock_text = event.locator(".event-stock strong")
     stock_before = int((stock_text.text_content() or "0").strip())
-    pending_before = _orders_panel(page).locator(".order-card.state-pending_payment").count()
+
+    orders = _orders_panel(page)
+    pending = orders.locator(".order-card").filter(
+        has_text="周末话剧 · 雷雨"
+    ).filter(has=page.locator(".state-pending_payment"))
+    pending_count_before = pending.count()
 
     event.get_by_role("button", name=re.compile(r"订 1 张")).click()
 
-    orders = _orders_panel(page)
-    expect(orders.locator(".order-card.state-pending_payment")).to_have_count(
-        pending_before + 1, timeout=15_000
-    )
+    expect(pending).to_have_count(pending_count_before + 1, timeout=15_000)
+    # 订单按 createdAt 降序，第一条即刚创建的订单
+    new_order = pending.first
+    order_id = (new_order.locator(".order-id").inner_text() or "").strip()
+    expect(new_order).to_be_visible(timeout=15_000)
     expect(stock_text).to_have_text(str(stock_before - 1), timeout=15_000)
 
-    new_order = orders.locator(".order-card").filter(
-        has_text="周末话剧 · 雷雨"
-    ).filter(has=page.locator(".state-pending_payment")).first
-    expect(new_order).to_be_visible()
-
     new_order.get_by_role("button", name="支付").click()
-    expect(new_order).to_have_class(re.compile(r"state-paid"), timeout=15_000)
+    paid_order = orders.locator(".order-card").filter(has_text=order_id)
+    expect(paid_order).to_have_class(re.compile(r"state-paid"), timeout=15_000)
 
-    new_order.get_by_role("button", name="出票").click()
-    expect(new_order).to_have_class(re.compile(r"state-ticket_issued"), timeout=15_000)
+    paid_order.get_by_role("button", name="出票").click()
+    expect(paid_order).to_have_class(re.compile(r"state-ticket_issued"), timeout=15_000)
 
 
 def test_gold_tenant_approval_plugin_blocks_bulk_order(page: Page):
@@ -107,7 +110,12 @@ def test_gold_tenant_approval_plugin_blocks_bulk_order(page: Page):
     _select_tenant(page, "金牌企业租户")
     _wait_tenant_events(page, re.compile("春季演唱会"))
 
-    event = _events_panel(page).locator(".event-card").first
+    event = _events_panel(page).locator(".event-card").filter(
+        has=page.get_by_role("heading", name=re.compile("春季演唱会"))
+    )
+    expect(event.get_by_role("button", name=re.compile("订 15 张"))).to_be_enabled()
     event.get_by_role("button", name=re.compile("订 15 张")).click()
 
-    expect(page.locator(".error-banner")).to_contain_text("审批", timeout=15_000)
+    banner = page.locator(".error-banner")
+    expect(banner).to_be_visible(timeout=15_000)
+    expect(banner).to_contain_text("审批", timeout=15_000)

@@ -16,6 +16,12 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: apiProxyTarget,
           changeOrigin: true,
+          configure: (proxy) => {
+            // 浏览器 fetch 会带 Origin；Gateway CORS 若未包含当前端口会 403
+            proxy.on('proxyReq', (proxyReq) => {
+              proxyReq.removeHeader('origin')
+            })
+          },
         },
       },
     },

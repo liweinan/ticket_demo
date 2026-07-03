@@ -22,8 +22,12 @@ public class ServiceWebConfig implements WebMvcConfigurer {
         registry.addMapping("/api/**")
                 .allowedOrigins(
                         "http://localhost:5173",
+                        "http://localhost:51730",
+                        "http://127.0.0.1:5173",
+                        "http://127.0.0.1:51730",
                         "http://frontend:5173",
-                        "http://host.docker.internal:5173")
+                        "http://host.docker.internal:5173",
+                        "http://host.docker.internal:51730")
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .exposedHeaders("X-Tenant-ID");

@@ -63,7 +63,8 @@ docker compose up --build
 
 | 服务 | 地址 | 说明 |
 |------|------|------|
-| 前端 | http://localhost:5173 | Vite dev，`/api` 代理到 Gateway |
+| 前端（Docker） | http://localhost:51730 | 容器内 Vite，`/api` 代理到 Gateway |
+| 前端（pnpm dev） | http://localhost:5173 | 本地开发 |
 | API 网关 | http://localhost:8080 | Spring Cloud Gateway（唯一对外入口） |
 | tenant-service | localhost:8081 | 租户元数据 |
 | event-service | localhost:8082 | 活动 + 库存（Redis） |
@@ -193,7 +194,7 @@ NO_PROXY='*' uv run pytest tests/ -v
 
 | 变量 | 本地默认 | Docker E2E 容器 |
 |------|----------|-----------------|
-| `BASE_URL` | `http://localhost:5173` | `http://host.docker.internal:5173` |
+| `BASE_URL` | `http://localhost:5173`（pnpm dev）或 `http://localhost:51730`（Docker） | `http://host.docker.internal:51730` |
 | `API_URL` | `http://localhost:8080` | `http://host.docker.internal:8080` |
 
 ### 代理说明

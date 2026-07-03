@@ -15,7 +15,7 @@ testpaths = ["tests"]
 addopts = "-v --tb=short"
 filterwarnings = ["ignore::DeprecationWarning"]
 # API 用例先跑，UI 用例后跑（避免限流影响 UI）
-python_files = ["test_api.py", "test_app.py"]
+python_files = ["test_api.py", "test_app.py", "test_z_rate_limit.py"]
 
 [tool.pytest_playwright]
 # 容器内无 DISPLAY，使用 headless
