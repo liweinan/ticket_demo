@@ -10,72 +10,94 @@
 
 ```mermaid
 flowchart TB
-  subgraph browser [Browser_5173_or_51730]
-    FE[React_Vite]
+  subgraph browser ["frontend — React 18 + Vite + TypeScript :5173 / :51730"]
+    FE["App.tsx 页面总控<br/>client.ts · tenantApi / eventApi / orderApi<br/>TenantSelector · EventList · OrderList"]
   end
 
-  subgraph gateway [Gateway_8080]
-    GW[SpringCloudGateway]
-    RL[Resilience4j_RateLimiter]
-    TV[TenantValidationFilter]
+  subgraph gateway ["gateway-service — Spring Cloud Gateway WebFlux :8080"]
+    GW["GatewayRouteConfig 路由<br/>GatewayHealthController 健康聚合"]
+    TV["TenantValidationFilter<br/>→ WebClient 调 tenant-service"]
+    RL["TenantRateLimitFilter<br/>Resilience4j RateLimiter"]
     GW --> TV --> RL
   end
 
-  subgraph nacos [Nacos_8848]
-    NC[Config]
-    ND[Discovery]
+  subgraph nacos ["Nacos — 注册 / 配置 :8848"]
+    NC["动态配置 Data ID"]
+    ND["服务发现 lb://"]
   end
 
-  subgraph services [Microservices]
-    TS[tenant_service_8081]
-    ES[event_service_8082]
-    OS[order_service_8083]
-    AS[audit_service_8084]
+  subgraph ts ["tenant-service — Spring Boot + JPA :8081"]
+    TSC["TenantController · TenantApiController<br/>TenantService · Tenant"]
   end
 
-  subgraph shared [Shared_Libraries]
-    TC[ticket_common]
-    TA[ticket_api]
+  subgraph es ["event-service — Spring Boot + JPA + Redis :8082"]
+    ESC["EventController · EventInternalController<br/>InventoryService · RedisInventoryCache"]
   end
 
-  subgraph messaging [Kafka]
-    TOPIC[order.events]
+  subgraph os ["order-service — Spring Boot + Feign + Kafka :8083"]
+    OSC["OrderController · OrderService<br/>OrderStateMachine · PluginRegistry<br/>ApprovalWorkflowPlugin · OrderEventPublisher"]
   end
 
-  subgraph data [DataLayer]
-    PG[(PostgreSQL)]
-    RD[(Redis)]
+  subgraph as ["audit-service — Spring Boot + Kafka Consumer :8084"]
+    ASC["OrderEventConsumer<br/>OrderAuditLog"]
   end
 
-  subgraph observability [Observability]
-    Prom[Prometheus_9090]
-    Graf[Grafana_3000]
+  subgraph shared ["共享库 — Maven 模块"]
+    TC["ticket-common<br/>TenantContext · TenantHeaderInterceptor<br/>SnowflakeIdGenerator · ServiceWebConfig"]
+    TA["ticket-api<br/>EventQueryClient · EventInventoryClient<br/>OrderEvent · TenantFeignInterceptor"]
+  end
+
+  subgraph messaging ["Kafka — Spring Kafka :9092"]
+    TOPIC["Topic: order.events<br/>key=tenantId"]
+  end
+
+  subgraph data ["数据层"]
+    PG[("PostgreSQL<br/>tenants · ticket_events<br/>orders · order_audit_log")]
+    RD[("Redis<br/>inventory:tenantId:eventId")]
+  end
+
+  subgraph observability ["可观测性 — Micrometer + Actuator"]
+    Prom["Prometheus :9090<br/>scrape /actuator/prometheus"]
+    Graf["Grafana :3000<br/>JVM Dashboard 4701"]
   end
 
   FE -->|"/api + X-Tenant-ID"| GW
-  GW --> TS
-  GW --> ES
-  GW --> OS
-  OS -->|OpenFeign /internal| ES
-  OS -->|publish| TOPIC
-  TOPIC -->|consume| AS
-  TS --> PG
-  ES --> PG
-  ES --> RD
-  OS --> PG
-  AS --> PG
+  RL --> TSC
+  RL --> ESC
+  RL --> OSC
+  OSC -->|OpenFeign /internal| ESC
+  OSC -->|publish| TOPIC
+  TOPIC -->|@KafkaListener| ASC
+  TSC --> PG
+  ESC --> PG
+  ESC --> RD
+  OSC --> PG
+  ASC --> PG
   GW --> NC
   GW --> ND
-  services --> TC
-  OS --> TA
-  ES --> TA
-  TS -->|"/actuator/prometheus"| Prom
-  ES -->|"/actuator/prometheus"| Prom
-  OS -->|"/actuator/prometheus"| Prom
-  AS -->|"/actuator/prometheus"| Prom
-  GW -->|"/actuator/prometheus"| Prom
+  TSC & ESC & OSC & ASC -.->|Maven 依赖| TC
+  OSC & ESC -.->|Feign 契约| TA
+  GW & TSC & ESC & OSC & ASC -->|/actuator/prometheus| Prom
   Prom --> Graf
 ```
+
+### 1.1 架构图标注说明
+
+| 模块 | 端口 | 技术栈 | 关键类 / 组件 |
+|------|------|--------|---------------|
+| **frontend** | 5173（pnpm）/ 51730（Docker） | React 18、Vite、TypeScript | `App.tsx`、`api/client.ts`、`TenantSelector`、`EventList`、`OrderList` |
+| **gateway-service** | 8080 | Spring Cloud Gateway、WebFlux、Resilience4j、WebClient | `GatewayRouteConfig`、`TenantValidationFilter`、`TenantRateLimitFilter`、`GatewayHealthController`、`TenantRateLimitProperties` |
+| **tenant-service** | 8081 | Spring Boot、Spring Data JPA、PostgreSQL | `TenantController`、`TenantApiController`（`/internal/tenants/{id}`）、`TenantService`、`Tenant` |
+| **event-service** | 8082 | Spring Boot、JPA、Spring Data Redis、Lua 脚本 | `EventController`、`EventInternalController`、`EventService`、`InventoryService`、`RedisInventoryCache`、`InventoryCacheWarmup` |
+| **order-service** | 8083 | Spring Boot、JPA、OpenFeign、Spring Kafka、Resilience4j CB/Retry | `OrderController`、`OrderService`、`OrderStateMachine`、`PluginRegistry`、`ApprovalWorkflowPlugin`、`OrderEventPublisher` |
+| **audit-service** | 8084 | Spring Boot、JPA、Spring Kafka Consumer | `OrderEventConsumer`、`OrderAuditLog`、`AuditHealthController` |
+| **ticket-common** | —（JAR） | Servlet 拦截器、Micrometer 共享配置 | `TenantContext`、`TenantHeaderInterceptor`、`TenantConstants`、`SnowflakeIdGenerator`、`ServiceWebConfig`、`GlobalExceptionHandler` |
+| **ticket-api** | —（JAR） | OpenFeign 接口、DTO、事件模型 | `EventQueryClient`、`EventInventoryClient`、`TenantClient`、`OrderEvent`、`TenantFeignInterceptor` |
+| **Nacos** | 8848 | Spring Cloud Alibaba | 服务发现 `lb://`、配置 Data ID（如 `gateway-service.yaml`） |
+| **Kafka** | 9092 | Spring Kafka | Topic `order.events`；Producer `OrderEventPublisher`；Consumer `OrderEventConsumer` |
+| **PostgreSQL** | 5432 | 各服务 JPA | 表 `tenants`、`ticket_events`、`orders`、`order_audit_log` |
+| **Redis** | 6379 | Lettuce + Lua | 键 `inventory:{tenantId}:{eventId}`，库存预占 |
+| **Prometheus / Grafana** | 9090 / 3000 | Micrometer Registry、静态 scrape | `/actuator/prometheus`；`docker/prometheus/prometheus.yml` |
 
 **流量分层**：
 
